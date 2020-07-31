@@ -1,4 +1,5 @@
 require 'fluent/input'
+require 'fluent/event'
 require 'aws-sdk-ec2'
 require 'aws-sdk-rds'
 
@@ -208,8 +209,9 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
     begin
       log.debug "raw_records.count: #{raw_records.count}"
       record = nil
+      es = Fluent::MultiEventStream.new
       raw_records.each do |raw_record|
-        log.debug "raw_record=#{raw_record}"
+        log.debug { "raw_record=#{raw_record}" }
         line_match = LOG_REGEXP.match(raw_record)
 
         unless line_match
@@ -217,7 +219,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
           record["message"] << "\n" + raw_record unless record.nil?
         else
           # emit before record
-          router.emit(@tag, event_time_of_row(record), record) unless record.nil?
+          es.add(event_time_of_row(record), record) unless record.nil?
 
           # set a record
           last_seen_record_time = line_match[:time]
@@ -234,7 +236,8 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
         end
       end
       # emit last record
-      router.emit(@tag, event_time_of_row(record), record) unless record.nil?
+      es.add(event_time_of_row(record), record) unless record.nil?
+      router.emit_stream(@tag, es)
     rescue => e
       log.warn e.message
     end
