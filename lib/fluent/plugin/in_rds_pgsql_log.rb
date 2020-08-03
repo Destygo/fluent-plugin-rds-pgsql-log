@@ -66,11 +66,12 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
     log_files = get_first_unseen_log_file
     return schedule_next if log_files.empty?
 
-    additional_data_pending = true
-    while additional_data_pending
-        additional_data_pending = read_and_forward(log_files[0])
-        put_posfile
-    end
+    additional_data_pending = read_and_forward(log_files[0])
+
+    put_posfile
+
+    # Directly schedule next fetch if additional data is pending
+    return schedule_next(0.1) if additional_data_pending
 
     schedule_next
   rescue => e
