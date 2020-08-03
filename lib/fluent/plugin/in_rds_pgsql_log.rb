@@ -66,12 +66,11 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
     log_files = get_first_unseen_log_file
     return schedule_next if log_files.empty?
 
-    additional_data_pending = read_and_forward(log_files[0])
-
-    put_posfile
-
-    # Directly schedule next fetch if additional data is pending
-    return schedule_next(1) if additional_data_pending
+    additional_data_pending = true
+    while additional_data_pending
+        additional_data_pending = read_and_forward(log_files[0])
+        put_posfile
+    end
 
     schedule_next
   rescue => e
@@ -167,7 +166,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
       )
       raw_records = get_logdata(log_file_portion, log_file_name)
 
-      unless raw_records.nil?
+      unless raw_records.empty?
         # save maximum written timestamp value
         last_seen_record_time = parse_and_emit(raw_records, log_file_name)
         unless last_seen_record_time.nil?
@@ -193,7 +192,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
     # save got line's marker
     @pos_info[log_file_name] = log_file_portion.marker
 
-    log_file_portion.log_file_data.split("\n")
+    log_file_portion.log_file_data.to_s.split("\n")
   rescue => e
     log.warn e.message
   end
