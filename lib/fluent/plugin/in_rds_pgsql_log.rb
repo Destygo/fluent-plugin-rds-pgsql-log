@@ -17,6 +17,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
   config_param :pos_file, :string, :default => "fluent-plugin-rds-pgsql-log-pos.dat"
   config_param :refresh_interval, :integer, :default => 30
   config_param :tag, :string, :default => "rds-pgsql.log"
+  config_param :record_keys, :array, :default => ["message"]
   config_param :extra_labels, :hash, :default => {}
 
   def configure(conf)
@@ -220,7 +221,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
           record["message"] << "\n" + raw_record unless record.nil?
         else
           # emit before record
-          es.add(event_time_of_row(record), record) unless record.nil?
+          es.add(event_time_of_row(record), record.slice(*@record_keys).merge(@extra_labels)) unless record.nil?
 
           # set a record
           last_seen_record_time = line_match[:time]
@@ -228,16 +229,16 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
             "time" => line_match[:time],
             "host" => line_match[:host],
             "user" => line_match[:user],
-            "database" => line_match[:database],
+            "pg_database" => line_match[:database],
             "pid" => line_match[:pid],
             "message_level" => line_match[:message_level],
             "message" => line_match[:message],
             "log_file_name" => log_file_name,
-          }.merge(@extra_labels)
+          }
         end
       end
       # emit last record
-      es.add(event_time_of_row(record), record) unless record.nil?
+      es.add(event_time_of_row(record), record.slice(*@record_keys).merge(@extra_labels)) unless record.nil?
       router.emit_stream(@tag, es)
     rescue => e
       log.warn e.message
