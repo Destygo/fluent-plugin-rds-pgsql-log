@@ -17,6 +17,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
   config_param :pos_file, :string, :default => "fluent-plugin-rds-pgsql-log-pos.dat"
   config_param :refresh_interval, :integer, :default => 30
   config_param :tag, :string, :default => "rds-pgsql.log"
+  config_param :extra_labels, :hash, :default => {}
 
   def configure(conf)
     super
@@ -232,7 +233,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
             "message_level" => line_match[:message_level],
             "message" => line_match[:message],
             "log_file_name" => log_file_name,
-          }
+          }.merge(@extra_labels)
         end
       end
       # emit last record
