@@ -17,6 +17,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
   config_param :pos_file, :string, :default => "fluent-plugin-rds-pgsql-log-pos.dat"
   config_param :refresh_interval, :integer, :default => 30
   config_param :tag, :string, :default => "rds-pgsql.log"
+  config_param :record_keys, :array, :default => ["message"]
   config_param :extra_labels, :hash, :default => {}
 
   def configure(conf)
@@ -160,12 +161,14 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
       log_file_name = log_file[:log_file_name]
       marker = @pos_info.has_key?(log_file_name) ? @pos_info[log_file_name] : "0"
 
-      log.debug "download log from rds: log_file_name=#{log_file_name}, marker=#{marker}"
+      dl_start = Time.now()
       log_file_portion = @rds.download_db_log_file_portion(
         db_instance_identifier: @db_instance_identifier,
         log_file_name: log_file_name,
         marker: marker,
+        number_of_lines: 1000
       )
+      log.debug "download log from rds: log_file_name=#{log_file_name}, marker=#{marker}, time=#{Time.now() - dl_start}"
       raw_records = get_logdata(log_file_portion, log_file_name)
 
       unless raw_records.empty?
@@ -177,7 +180,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
           @pos_last_written_timestamp += 1
         end
       else
-        @pos_last_written_timestamp += 1
+        @pos_last_written_timestamp = log_file[:last_written] + 1
       end
 
       additional_data_pending = log_file_portion.additional_data_pending
@@ -220,7 +223,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
           record["message"] << "\n" + raw_record unless record.nil?
         else
           # emit before record
-          es.add(event_time_of_row(record), record) unless record.nil?
+          es.add(event_time_of_row(record), record.slice(*@record_keys).merge!(@extra_labels)) unless record.nil?
 
           # set a record
           last_seen_record_time = line_match[:time]
@@ -228,16 +231,16 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
             "time" => line_match[:time],
             "host" => line_match[:host],
             "user" => line_match[:user],
-            "database" => line_match[:database],
+            "pg_database" => line_match[:database],
             "pid" => line_match[:pid],
             "message_level" => line_match[:message_level],
             "message" => line_match[:message],
             "log_file_name" => log_file_name,
-          }.merge(@extra_labels)
+          }
         end
       end
       # emit last record
-      es.add(event_time_of_row(record), record) unless record.nil?
+      es.add(event_time_of_row(record), record.slice(*@record_keys).merge!(@extra_labels)) unless record.nil?
       router.emit_stream(@tag, es)
     rescue => e
       log.warn e.message
