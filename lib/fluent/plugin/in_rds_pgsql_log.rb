@@ -161,12 +161,13 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
       log_file_name = log_file[:log_file_name]
       marker = @pos_info.has_key?(log_file_name) ? @pos_info[log_file_name] : "0"
 
-      log.debug "download log from rds: log_file_name=#{log_file_name}, marker=#{marker}"
+      dl_start = Time.now()
       log_file_portion = @rds.download_db_log_file_portion(
         db_instance_identifier: @db_instance_identifier,
         log_file_name: log_file_name,
         marker: marker,
       )
+      log.debug "download log from rds: log_file_name=#{log_file_name}, marker=#{marker}, time=#{Time.now() - dl_start}"
       raw_records = get_logdata(log_file_portion, log_file_name)
 
       unless raw_records.empty?
@@ -221,7 +222,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
           record["message"] << "\n" + raw_record unless record.nil?
         else
           # emit before record
-          es.add(event_time_of_row(record), record.slice(*@record_keys).merge(@extra_labels)) unless record.nil?
+          es.add(event_time_of_row(record), record.slice(*@record_keys).merge!(@extra_labels)) unless record.nil?
 
           # set a record
           last_seen_record_time = line_match[:time]
@@ -238,7 +239,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
         end
       end
       # emit last record
-      es.add(event_time_of_row(record), record.slice(*@record_keys).merge(@extra_labels)) unless record.nil?
+      es.add(event_time_of_row(record), record.slice(*@record_keys).merge!(@extra_labels)) unless record.nil?
       router.emit_stream(@tag, es)
     rescue => e
       log.warn e.message
