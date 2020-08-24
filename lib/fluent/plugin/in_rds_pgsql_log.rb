@@ -166,6 +166,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
         db_instance_identifier: @db_instance_identifier,
         log_file_name: log_file_name,
         marker: marker,
+        number_of_lines: 1000
       )
       log.debug "download log from rds: log_file_name=#{log_file_name}, marker=#{marker}, time=#{Time.now() - dl_start}"
       raw_records = get_logdata(log_file_portion, log_file_name)
