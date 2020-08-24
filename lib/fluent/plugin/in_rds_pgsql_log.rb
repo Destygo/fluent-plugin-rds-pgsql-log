@@ -180,7 +180,7 @@ class Fluent::Plugin::RdsPgsqlLogInput < Fluent::Plugin::Input
           @pos_last_written_timestamp += 1
         end
       else
-        @pos_last_written_timestamp += 1
+        @pos_last_written_timestamp += (log_file.last_written + 1)
       end
 
       additional_data_pending = log_file_portion.additional_data_pending
